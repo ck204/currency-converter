@@ -17,6 +17,7 @@ const CURRENCIES = [
 ] as const;
 
 type CurrencyCode = (typeof CURRENCIES)[number]['code'];
+type RouteCurrency = 'BND' | 'RM';
 type Rate = { buying: string; selling: string };
 type RateBook = Record<CurrencyCode, Rate>;
 
@@ -40,6 +41,25 @@ const formatRate = (value: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 6,
   }).format(value);
+
+const otherRouteCurrency = (currency: RouteCurrency): RouteCurrency =>
+  currency === 'BND' ? 'RM' : 'BND';
+
+const makeRateRows = (
+  source: RouteCurrency,
+  dealer: RouteCurrency,
+  preferredTarget?: CurrencyCode,
+): CurrencyCode[] => {
+  const availableTargets = CURRENCIES.map(({ code }) => code).filter(
+    (code) => code !== source && code !== dealer,
+  );
+  const target =
+    preferredTarget && availableTargets.includes(preferredTarget)
+      ? preferredTarget
+      : availableTargets[0];
+
+  return [source, target];
+};
 
 function getQuote(
   source: CurrencyCode,
@@ -83,12 +103,11 @@ function getQuote(
 }
 
 export default function Home() {
-  const [sourceCurrency, setSourceCurrency] = useState<CurrencyCode>('BND');
-  const [dealerCurrency, setDealerCurrency] = useState<CurrencyCode>('RM');
+  const [sourceCurrency, setSourceCurrency] = useState<RouteCurrency>('BND');
+  const [dealerCurrency, setDealerCurrency] = useState<RouteCurrency>('RM');
   const [rowCurrencies, setRowCurrencies] = useState<CurrencyCode[]>([
     'BND',
     'RMB',
-    'NTD',
   ]);
   const [rates, setRates] = useState<RateBook>(DEFAULT_RATES);
 
@@ -97,29 +116,48 @@ export default function Home() {
   );
 
   const results = useMemo(
-    () =>
-      rowCurrencies
-        .filter((currency) => currency !== sourceCurrency)
-        .map((currency) => ({
-          currency,
-          quote: getQuote(sourceCurrency, dealerCurrency, currency, rates),
-        })),
+    () => [
+      {
+        currency: rowCurrencies[1],
+        quote: getQuote(
+          sourceCurrency,
+          dealerCurrency,
+          rowCurrencies[1],
+          rates,
+        ),
+      },
+    ],
     [dealerCurrency, rates, rowCurrencies, sourceCurrency],
   );
 
-  const changeDealerCurrency = (currency: CurrencyCode) => {
-    setDealerCurrency(currency);
-    setRowCurrencies(
-      CURRENCIES.filter(({ code }) => code !== currency).map(
-        ({ code }) => code,
-      ),
+  const changeSourceCurrency = (currency: RouteCurrency) => {
+    const nextDealer =
+      currency === dealerCurrency
+        ? otherRouteCurrency(currency)
+        : dealerCurrency;
+
+    setSourceCurrency(currency);
+    setDealerCurrency(nextDealer);
+    setRowCurrencies((current) =>
+      makeRateRows(currency, nextDealer, current[1]),
     );
   };
 
-  const changeRowCurrency = (index: number, currency: CurrencyCode) => {
+  const changeDealerCurrency = (currency: RouteCurrency) => {
+    const nextSource =
+      currency === sourceCurrency
+        ? otherRouteCurrency(currency)
+        : sourceCurrency;
+
+    setDealerCurrency(currency);
+    setSourceCurrency(nextSource);
     setRowCurrencies((current) =>
-      current.map((value, rowIndex) => (rowIndex === index ? currency : value)),
+      makeRateRows(nextSource, currency, current[1]),
     );
+  };
+
+  const changeTargetCurrency = (currency: CurrencyCode) => {
+    setRowCurrencies((current) => [current[0], currency]);
   };
 
   const changeRate = (
@@ -207,12 +245,14 @@ export default function Home() {
               !['BND', 'RM'].includes(candidate.sourceCurrency) ||
               !isCurrency(candidate.dealerCurrency) ||
               !['BND', 'RM'].includes(candidate.dealerCurrency) ||
-              !Array.isArray(candidate.rates)
+              !Array.isArray(candidate.rates) ||
+              candidate.sourceCurrency === candidate.dealerCurrency
             ) {
               throw new Error('Invalid exchange calculator configuration.');
             }
 
             const nextRates: RateBook = structuredClone(DEFAULT_RATES);
+            let configuredTarget: CurrencyCode | undefined;
             for (const item of candidate.rates) {
               const rate = item as {
                 currency?: unknown;
@@ -234,10 +274,26 @@ export default function Home() {
                 buying: String(rate.buying),
                 selling: String(rate.selling),
               };
+              if (
+                rate.currency !== candidate.sourceCurrency &&
+                rate.currency !== candidate.dealerCurrency &&
+                configuredTarget === undefined
+              ) {
+                configuredTarget = rate.currency;
+              }
             }
 
-            setSourceCurrency(candidate.sourceCurrency);
-            changeDealerCurrency(candidate.dealerCurrency);
+            const configuredSource = candidate.sourceCurrency as RouteCurrency;
+            const configuredDealer = candidate.dealerCurrency as RouteCurrency;
+            setSourceCurrency(configuredSource);
+            setDealerCurrency(configuredDealer);
+            setRowCurrencies(
+              makeRateRows(
+                configuredSource,
+                configuredDealer,
+                configuredTarget,
+              ),
+            );
             setRates(nextRates);
             return {
               sourceCurrency: candidate.sourceCurrency,
@@ -285,7 +341,7 @@ export default function Home() {
                 className="select-control"
                 value={sourceCurrency}
                 onChange={(event) =>
-                  setSourceCurrency(event.target.value as CurrencyCode)
+                  changeSourceCurrency(event.target.value as RouteCurrency)
                 }
                 aria-label="Currency you have"
               >
@@ -307,7 +363,7 @@ export default function Home() {
                 className="select-control"
                 value={dealerCurrency}
                 onChange={(event) =>
-                  changeDealerCurrency(event.target.value as CurrencyCode)
+                  changeDealerCurrency(event.target.value as RouteCurrency)
                 }
                 aria-label="Dealer currency"
               >
@@ -344,9 +400,7 @@ export default function Home() {
               <span className="step-number">02</span>
               <div>
                 <h2 id="rates-heading">Enter the dealer’s rates</h2>
-                <p>
-                  Enter how many {dealerCurrency} the dealer quotes for 1 unit.
-                </p>
+                <p>Enter rates for your currency and one foreign currency.</p>
               </div>
             </div>
             <button className="clear-button" type="button" onClick={clearRates}>
@@ -368,10 +422,13 @@ export default function Home() {
                 <NativeSelect
                   className="currency-select"
                   value={currency}
+                  disabled={index === 0}
                   onChange={(event) =>
-                    changeRowCurrency(index, event.target.value as CurrencyCode)
+                    changeTargetCurrency(event.target.value as CurrencyCode)
                   }
-                  aria-label={`Currency for rate row ${index + 1}`}
+                  aria-label={
+                    index === 0 ? 'Your currency rate' : 'Foreign currency rate'
+                  }
                 >
                   {CURRENCIES.map((option) => (
                     <NativeSelectOption
@@ -379,8 +436,7 @@ export default function Home() {
                       value={option.code}
                       disabled={
                         option.code === dealerCurrency ||
-                        (option.code !== currency &&
-                          rowCurrencies.includes(option.code))
+                        (index === 1 && option.code === sourceCurrency)
                       }
                     >
                       {option.code}

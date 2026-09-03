@@ -18,8 +18,10 @@ const CURRENCIES = [
 
 type CurrencyCode = (typeof CURRENCIES)[number]['code'];
 type RouteCurrency = 'BND' | 'RM';
+type RateUnit = 1 | 100;
 type Rate = { buying: string; selling: string };
 type RateBook = Record<CurrencyCode, Rate>;
+type RateUnitBook = Record<CurrencyCode, RateUnit>;
 
 const DEFAULT_RATES: RateBook = {
   BND: { buying: '', selling: '' },
@@ -28,12 +30,24 @@ const DEFAULT_RATES: RateBook = {
   NTD: { buying: '', selling: '' },
 };
 
+const DEFAULT_RATE_UNITS: RateUnitBook = {
+  BND: 1,
+  RM: 1,
+  RMB: 1,
+  NTD: 1,
+};
+
 const isCurrency = (value: unknown): value is CurrencyCode =>
   typeof value === 'string' && CURRENCIES.some(({ code }) => code === value);
 
 const toPositiveNumber = (value: string) => {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? number : null;
+};
+
+const normalizeRate = (value: string, quotedUnits: RateUnit) => {
+  const rate = toPositiveNumber(value);
+  return rate === null ? null : rate / quotedUnits;
 };
 
 const formatRate = (value: number) =>
@@ -66,11 +80,16 @@ function getQuote(
   dealer: CurrencyCode,
   target: CurrencyCode,
   rates: RateBook,
+  rateUnits: RateUnitBook,
 ) {
   const targetBuying =
-    target === dealer ? 1 : toPositiveNumber(rates[target].buying);
+    target === dealer
+      ? 1
+      : normalizeRate(rates[target].buying, rateUnits[target]);
   const targetSelling =
-    target === dealer ? 1 : toPositiveNumber(rates[target].selling);
+    target === dealer
+      ? 1
+      : normalizeRate(rates[target].selling, rateUnits[target]);
 
   if (source === dealer) {
     if (targetBuying === null || targetSelling === null) return null;
@@ -82,8 +101,8 @@ function getQuote(
     };
   }
 
-  const sourceBuying = toPositiveNumber(rates[source].buying);
-  const sourceSelling = toPositiveNumber(rates[source].selling);
+  const sourceBuying = normalizeRate(rates[source].buying, rateUnits[source]);
+  const sourceSelling = normalizeRate(rates[source].selling, rateUnits[source]);
 
   if (
     sourceBuying === null ||
@@ -110,6 +129,7 @@ export default function Home() {
     'RMB',
   ]);
   const [rates, setRates] = useState<RateBook>(DEFAULT_RATES);
+  const [rateUnits, setRateUnits] = useState<RateUnitBook>(DEFAULT_RATE_UNITS);
 
   const dealerCurrencies = CURRENCIES.filter(
     ({ code }) => code === 'BND' || code === 'RM',
@@ -124,10 +144,11 @@ export default function Home() {
           dealerCurrency,
           rowCurrencies[1],
           rates,
+          rateUnits,
         ),
       },
     ],
-    [dealerCurrency, rates, rowCurrencies, sourceCurrency],
+    [dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency],
   );
 
   const changeSourceCurrency = (currency: RouteCurrency) => {
@@ -171,6 +192,13 @@ export default function Home() {
     }));
   };
 
+  const changeRateUnit = (currency: CurrencyCode, quotedUnits: RateUnit) => {
+    setRateUnits((current) => ({
+      ...current,
+      [currency]: quotedUnits,
+    }));
+  };
+
   const clearRates = () => setRates(DEFAULT_RATES);
 
   useEffect(() => {
@@ -204,7 +232,7 @@ export default function Home() {
           name: 'configure_exchange_calculator',
           title: 'Configure exchange calculator',
           description:
-            'Set the user currency, dealer currency, and dealer buying and selling rates in the visible calculator.',
+            'Set the user currency, dealer currency, quoted units, and dealer buying and selling rates in the visible calculator.',
           inputSchema: {
             type: 'object',
             properties: {
@@ -219,10 +247,11 @@ export default function Home() {
                       type: 'string',
                       enum: ['BND', 'RM', 'RMB', 'NTD'],
                     },
+                    quotedUnits: { type: 'number', enum: [1, 100] },
                     buying: { type: 'number', exclusiveMinimum: 0 },
                     selling: { type: 'number', exclusiveMinimum: 0 },
                   },
-                  required: ['currency', 'buying', 'selling'],
+                  required: ['currency', 'quotedUnits', 'buying', 'selling'],
                   additionalProperties: false,
                 },
               },
@@ -252,24 +281,29 @@ export default function Home() {
             }
 
             const nextRates: RateBook = structuredClone(DEFAULT_RATES);
+            const nextRateUnits: RateUnitBook =
+              structuredClone(DEFAULT_RATE_UNITS);
             let configuredTarget: CurrencyCode | undefined;
             for (const item of candidate.rates) {
               const rate = item as {
                 currency?: unknown;
+                quotedUnits?: unknown;
                 buying?: unknown;
                 selling?: unknown;
               };
               if (
                 !isCurrency(rate.currency) ||
+                (rate.quotedUnits !== 1 && rate.quotedUnits !== 100) ||
                 typeof rate.buying !== 'number' ||
                 rate.buying <= 0 ||
                 typeof rate.selling !== 'number' ||
                 rate.selling <= 0
               ) {
                 throw new Error(
-                  'Every rate must contain positive buying and selling values.',
+                  'Every rate must contain quoted units and positive buying and selling values.',
                 );
               }
+              nextRateUnits[rate.currency] = rate.quotedUnits;
               nextRates[rate.currency] = {
                 buying: String(rate.buying),
                 selling: String(rate.selling),
@@ -295,6 +329,7 @@ export default function Home() {
               ),
             );
             setRates(nextRates);
+            setRateUnits(nextRateUnits);
             return {
               sourceCurrency: candidate.sourceCurrency,
               dealerCurrency: candidate.dealerCurrency,
@@ -400,7 +435,10 @@ export default function Home() {
               <span className="step-number">02</span>
               <div>
                 <h2 id="rates-heading">Enter the dealer’s rates</h2>
-                <p>Enter rates for your currency and one foreign currency.</p>
+                <p>
+                  Copy the displayed rates and choose whether they cover 1 or
+                  100 units.
+                </p>
               </div>
             </div>
             <button className="clear-button" type="button" onClick={clearRates}>
@@ -413,6 +451,7 @@ export default function Home() {
             <legend className="sr-only">Dealer rates</legend>
             <div className="rate-header" aria-hidden="true">
               <span>Currency</span>
+              <span>Quoted per</span>
               <span>Dealer buying</span>
               <span>Dealer selling</span>
             </div>
@@ -443,6 +482,27 @@ export default function Home() {
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>
+
+                <div className="mobile-rate-field">
+                  <label htmlFor={`quoted-units-${index}`}>Quoted per</label>
+                  <NativeSelect
+                    id={`quoted-units-${index}`}
+                    className="unit-select"
+                    value={rateUnits[currency]}
+                    onChange={(event) =>
+                      changeRateUnit(
+                        currency,
+                        Number(event.target.value) as RateUnit,
+                      )
+                    }
+                    aria-label={`${currency} quoted units`}
+                  >
+                    <NativeSelectOption value={1}>1 unit</NativeSelectOption>
+                    <NativeSelectOption value={100}>
+                      100 units
+                    </NativeSelectOption>
+                  </NativeSelect>
+                </div>
 
                 <div className="mobile-rate-field">
                   <label htmlFor={`buying-${index}`}>Dealer buying</label>
@@ -485,7 +545,8 @@ export default function Home() {
             <Info size={16} aria-hidden="true" />
             <p>
               “Buying” means the dealer buys that currency. “Selling” means the
-              dealer sells it. Use rates quoted per 1 unit of currency.
+              dealer sells it. Rates quoted per 100 are divided by 100 before
+              calculating.
             </p>
           </div>
         </section>

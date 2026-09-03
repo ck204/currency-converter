@@ -219,12 +219,14 @@ h2 {
 }
 
 [data-slot='native-select-wrapper'].select-control,
-[data-slot='native-select-wrapper'].currency-select {
+[data-slot='native-select-wrapper'].currency-select,
+[data-slot='native-select-wrapper'].unit-select {
   width: 100%;
 }
 
 [data-slot='native-select-wrapper'].select-control select,
-[data-slot='native-select-wrapper'].currency-select select {
+[data-slot='native-select-wrapper'].currency-select select,
+[data-slot='native-select-wrapper'].unit-select select {
   height: 46px;
   border-color: #bfd0cb;
   border-radius: 11px;
@@ -301,7 +303,7 @@ h2 {
 .rate-header,
 .rate-row {
   display: grid;
-  grid-template-columns: 0.75fr 1fr 1fr;
+  grid-template-columns: 0.7fr 0.75fr 1fr 1fr;
   gap: 12px;
   align-items: center;
 }

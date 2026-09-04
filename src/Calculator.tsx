@@ -13,7 +13,14 @@ const CURRENCIES = [
   { code: 'BND', name: 'Brunei Dollar' },
   { code: 'RM', name: 'Ringgit Malaysia' },
   { code: 'RMB', name: 'Chinese Yuan' },
-  { code: 'NTD', name: 'New Taiwan Dollar' },
+  { code: 'NTD', name: 'Taiwan Dollar' },
+  { code: 'USD', name: 'US Dollar' },
+  { code: 'AUD', name: 'Australian Dollar' },
+  { code: 'JPY', name: 'Japanese Yen' },
+  { code: 'SGD', name: 'Singapore Dollar' },
+  { code: 'EUR', name: 'Euro' },
+  { code: 'PHP', name: 'Philippine Peso' },
+  { code: 'GBP', name: 'British Pound' },
 ] as const;
 
 type CurrencyCode = (typeof CURRENCIES)[number]['code'];
@@ -28,6 +35,13 @@ const DEFAULT_RATES: RateBook = {
   RM: { buying: '', selling: '' },
   RMB: { buying: '', selling: '' },
   NTD: { buying: '', selling: '' },
+  USD: { buying: '', selling: '' },
+  AUD: { buying: '', selling: '' },
+  JPY: { buying: '', selling: '' },
+  SGD: { buying: '', selling: '' },
+  EUR: { buying: '', selling: '' },
+  PHP: { buying: '', selling: '' },
+  GBP: { buying: '', selling: '' },
 };
 
 const DEFAULT_RATE_UNITS: RateUnitBook = {
@@ -35,6 +49,13 @@ const DEFAULT_RATE_UNITS: RateUnitBook = {
   RM: 1,
   RMB: 1,
   NTD: 1,
+  USD: 1,
+  AUD: 1,
+  JPY: 1,
+  SGD: 1,
+  EUR: 1,
+  PHP: 1,
+  GBP: 1,
 };
 
 const GOOGLE_CURRENCY_CODES: Record<CurrencyCode, string> = {
@@ -42,6 +63,13 @@ const GOOGLE_CURRENCY_CODES: Record<CurrencyCode, string> = {
   RM: 'MYR',
   RMB: 'CNY',
   NTD: 'TWD',
+  USD: 'USD',
+  AUD: 'AUD',
+  JPY: 'JPY',
+  SGD: 'SGD',
+  EUR: 'EUR',
+  PHP: 'PHP',
+  GBP: 'GBP',
 };
 
 const isCurrency = (value: unknown): value is CurrencyCode =>
@@ -256,7 +284,7 @@ export default function Home() {
                   properties: {
                     currency: {
                       type: 'string',
-                      enum: ['BND', 'RM', 'RMB', 'NTD'],
+                      enum: CURRENCIES.map(({ code }) => code),
                     },
                     quotedUnits: { type: 'number', enum: [1, 100] },
                     buying: { type: 'number', exclusiveMinimum: 0 },
@@ -489,7 +517,7 @@ export default function Home() {
                         (index === 1 && option.code === sourceCurrency)
                       }
                     >
-                      {option.code}
+                      {option.code} ({option.name})
                     </NativeSelectOption>
                   ))}
                 </NativeSelect>

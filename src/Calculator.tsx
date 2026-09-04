@@ -955,24 +955,6 @@ export default function Home() {
                         </strong>
                       </div>
                     )}
-
-                    <dl className="quote-details">
-                      <div>
-                        <dt>Dealer buys {currency}</dt>
-                        <dd>
-                          {formatRate(quote.buying)} {sourceCurrency}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Dealer sells {currency}</dt>
-                        <dd>
-                          {formatRate(quote.selling)} {sourceCurrency}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p className="unit-caption">
-                      Effective {sourceCurrency} price per 1 {currency}
-                    </p>
                   </>
                 ) : (
                   <div className="empty-result">

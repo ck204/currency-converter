@@ -23,6 +23,10 @@ const CURRENCIES = [
   { code: 'GBP', name: 'British Pound' },
 ] as const;
 
+const FOREIGN_CURRENCIES = CURRENCIES.filter(
+  ({ code }) => code !== 'BND' && code !== 'RM',
+);
+
 type CurrencyCode = (typeof CURRENCIES)[number]['code'];
 type RouteCurrency = 'BND' | 'RM';
 type RateUnit = 1 | 100;
@@ -96,12 +100,9 @@ const otherRouteCurrency = (currency: RouteCurrency): RouteCurrency =>
 
 const makeRateRows = (
   source: RouteCurrency,
-  dealer: RouteCurrency,
   preferredTarget?: CurrencyCode,
 ): CurrencyCode[] => {
-  const availableTargets = CURRENCIES.map(({ code }) => code).filter(
-    (code) => code !== source && code !== dealer,
-  );
+  const availableTargets = FOREIGN_CURRENCIES.map(({ code }) => code);
   const target =
     preferredTarget && availableTargets.includes(preferredTarget)
       ? preferredTarget
@@ -198,9 +199,7 @@ export default function Home() {
 
     setSourceCurrency(currency);
     setDealerCurrency(nextDealer);
-    setRowCurrencies((current) =>
-      makeRateRows(currency, nextDealer, current[1]),
-    );
+    setRowCurrencies((current) => makeRateRows(currency, current[1]));
   };
 
   const changeDealerCurrency = (currency: RouteCurrency) => {
@@ -211,9 +210,7 @@ export default function Home() {
 
     setDealerCurrency(currency);
     setSourceCurrency(nextSource);
-    setRowCurrencies((current) =>
-      makeRateRows(nextSource, currency, current[1]),
-    );
+    setRowCurrencies((current) => makeRateRows(nextSource, current[1]));
   };
 
   const changeTargetCurrency = (currency: CurrencyCode) => {
@@ -360,13 +357,7 @@ export default function Home() {
             const configuredDealer = candidate.dealerCurrency as RouteCurrency;
             setSourceCurrency(configuredSource);
             setDealerCurrency(configuredDealer);
-            setRowCurrencies(
-              makeRateRows(
-                configuredSource,
-                configuredDealer,
-                configuredTarget,
-              ),
-            );
+            setRowCurrencies(makeRateRows(configuredSource, configuredTarget));
             setRates(nextRates);
             setRateUnits(nextRateUnits);
             return {
@@ -508,18 +499,13 @@ export default function Home() {
                     index === 0 ? 'Your currency rate' : 'Foreign currency rate'
                   }
                 >
-                  {CURRENCIES.map((option) => (
-                    <NativeSelectOption
-                      key={option.code}
-                      value={option.code}
-                      disabled={
-                        option.code === dealerCurrency ||
-                        (index === 1 && option.code === sourceCurrency)
-                      }
-                    >
-                      {option.code} ({option.name})
-                    </NativeSelectOption>
-                  ))}
+                  {(index === 0 ? CURRENCIES : FOREIGN_CURRENCIES).map(
+                    (option) => (
+                      <NativeSelectOption key={option.code} value={option.code}>
+                        {option.code} ({option.name})
+                      </NativeSelectOption>
+                    ),
+                  )}
                 </NativeSelect>
 
                 <div className="mobile-rate-field">

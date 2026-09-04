@@ -509,6 +509,56 @@ h2 {
   line-height: 1.5;
 }
 
+.google-rate-check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 19px;
+  border: 1px solid #d2dfdc;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.google-rate-check strong {
+  color: #153d35;
+  font-size: 0.88rem;
+}
+
+.google-rate-check p {
+  margin: 3px 0 0;
+  color: #70807c;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.google-rate-check a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  padding: 10px 13px;
+  color: #fff;
+  background: #0d705d;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.google-rate-check a:hover {
+  background: #095b4c;
+  transform: translateY(-1px);
+}
+
+.google-rate-check a:focus-visible {
+  outline: 3px solid rgba(13, 112, 93, 0.24);
+  outline-offset: 3px;
+}
+
 footer {
   padding: 28px 0 8px;
   color: #73847f;
@@ -586,6 +636,15 @@ footer {
 
   .quote-details {
     grid-template-columns: 1fr;
+  }
+
+  .google-rate-check {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .google-rate-check a {
+    justify-content: center;
   }
 }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Info, RefreshCw } from 'lucide-react';
+import { ArrowRight, ExternalLink, Info, RefreshCw } from 'lucide-react';
 
 import {
   NativeSelect,
@@ -35,6 +35,13 @@ const DEFAULT_RATE_UNITS: RateUnitBook = {
   RM: 1,
   RMB: 1,
   NTD: 1,
+};
+
+const GOOGLE_CURRENCY_CODES: Record<CurrencyCode, string> = {
+  BND: 'BND',
+  RM: 'MYR',
+  RMB: 'CNY',
+  NTD: 'TWD',
 };
 
 const isCurrency = (value: unknown): value is CurrencyCode =>
@@ -150,6 +157,10 @@ export default function Home() {
     ],
     [dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency],
   );
+
+  const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(
+    `1 ${GOOGLE_CURRENCY_CODES[sourceCurrency]} to ${GOOGLE_CURRENCY_CODES[rowCurrencies[1]]}`,
+  )}`;
 
   const changeSourceCurrency = (currency: RouteCurrency) => {
     const nextDealer =
@@ -617,6 +628,23 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        <aside
+          className="google-rate-check"
+          aria-label="Google rate comparison"
+        >
+          <div>
+            <strong>Compare with Google</strong>
+            <p>
+              See Google’s current market result for 1 {sourceCurrency} to{' '}
+              {rowCurrencies[1]}.
+            </p>
+          </div>
+          <a href={googleSearchUrl} target="_blank" rel="noopener noreferrer">
+            Check {sourceCurrency} → {rowCurrencies[1]} on Google
+            <ExternalLink size={16} aria-hidden="true" />
+          </a>
+        </aside>
 
         <footer>
           Rates are calculated in your browser and are not saved or sent

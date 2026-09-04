@@ -873,7 +873,7 @@ export default function Home() {
 
         <section className="results-section" aria-labelledby="results-heading">
           <div className="section-heading results-heading">
-            <span className="step-number step-number-accent">03</span>
+            <span className="step-number">03</span>
             <div>
               <h2 id="results-heading">Effective direct rates</h2>
               <p>

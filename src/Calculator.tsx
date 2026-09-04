@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import {
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ArrowRight, ExternalLink, Info, RefreshCw } from 'lucide-react';
 
 import {
@@ -33,6 +39,15 @@ type RateUnit = 1 | 100;
 type Rate = { buying: string; selling: string };
 type RateBook = Record<CurrencyCode, Rate>;
 type RateUnitBook = Record<CurrencyCode, RateUnit>;
+type StoredCalculatorState = {
+  sourceCurrency: RouteCurrency;
+  dealerCurrency: RouteCurrency;
+  targetCurrency: CurrencyCode;
+  rates: RateBook;
+  rateUnits: RateUnitBook;
+};
+
+const STORAGE_KEY = 'currency-converter-state-v1';
 
 const DEFAULT_RATES: RateBook = {
   BND: { buying: '', selling: '' },
@@ -98,6 +113,85 @@ const formatRate = (value: number) =>
 const otherRouteCurrency = (currency: RouteCurrency): RouteCurrency =>
   currency === 'BND' ? 'RM' : 'BND';
 
+const isRouteCurrency = (value: unknown): value is RouteCurrency =>
+  value === 'BND' || value === 'RM';
+
+const isForeignCurrency = (value: unknown): value is CurrencyCode =>
+  isCurrency(value) && value !== 'BND' && value !== 'RM';
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isRateInputValue = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  (value === '' || (Number.isFinite(Number(value)) && Number(value) >= 0));
+
+const readStoredState = (): StoredCalculatorState => {
+  const fallback: StoredCalculatorState = {
+    sourceCurrency: 'BND',
+    dealerCurrency: 'RM',
+    targetCurrency: 'RMB',
+    rates: structuredClone(DEFAULT_RATES),
+    rateUnits: structuredClone(DEFAULT_RATE_UNITS),
+  };
+
+  if (typeof window === 'undefined') return fallback;
+
+  try {
+    const rawState = window.localStorage.getItem(STORAGE_KEY);
+    if (!rawState) return fallback;
+
+    const storedState: unknown = JSON.parse(rawState);
+    if (!isRecord(storedState)) return fallback;
+
+    const sourceCurrency = isRouteCurrency(storedState.sourceCurrency)
+      ? storedState.sourceCurrency
+      : fallback.sourceCurrency;
+    const dealerCurrency =
+      isRouteCurrency(storedState.dealerCurrency) &&
+      storedState.dealerCurrency !== sourceCurrency
+        ? storedState.dealerCurrency
+        : otherRouteCurrency(sourceCurrency);
+    const targetCurrency = isForeignCurrency(storedState.targetCurrency)
+      ? storedState.targetCurrency
+      : fallback.targetCurrency;
+
+    const rates = structuredClone(DEFAULT_RATES);
+    if (isRecord(storedState.rates)) {
+      for (const { code } of CURRENCIES) {
+        const storedRate = storedState.rates[code];
+        if (!isRecord(storedRate)) continue;
+        if (isRateInputValue(storedRate.buying)) {
+          rates[code].buying = storedRate.buying;
+        }
+        if (isRateInputValue(storedRate.selling)) {
+          rates[code].selling = storedRate.selling;
+        }
+      }
+    }
+
+    const rateUnits = structuredClone(DEFAULT_RATE_UNITS);
+    if (isRecord(storedState.rateUnits)) {
+      for (const { code } of CURRENCIES) {
+        const storedUnit = storedState.rateUnits[code];
+        if (storedUnit === 1 || storedUnit === 100) {
+          rateUnits[code] = storedUnit;
+        }
+      }
+    }
+
+    return {
+      sourceCurrency,
+      dealerCurrency,
+      targetCurrency,
+      rates,
+      rateUnits,
+    };
+  } catch {
+    return fallback;
+  }
+};
+
 const makeRateRows = (
   source: RouteCurrency,
   preferredTarget?: CurrencyCode,
@@ -158,14 +252,22 @@ function getQuote(
 }
 
 export default function Home() {
-  const [sourceCurrency, setSourceCurrency] = useState<RouteCurrency>('BND');
-  const [dealerCurrency, setDealerCurrency] = useState<RouteCurrency>('RM');
+  const [initialState] = useState(readStoredState);
+  const [sourceCurrency, setSourceCurrency] = useState<RouteCurrency>(
+    initialState.sourceCurrency,
+  );
+  const [dealerCurrency, setDealerCurrency] = useState<RouteCurrency>(
+    initialState.dealerCurrency,
+  );
   const [rowCurrencies, setRowCurrencies] = useState<CurrencyCode[]>([
-    'BND',
-    'RMB',
+    initialState.sourceCurrency,
+    initialState.targetCurrency,
   ]);
-  const [rates, setRates] = useState<RateBook>(DEFAULT_RATES);
-  const [rateUnits, setRateUnits] = useState<RateUnitBook>(DEFAULT_RATE_UNITS);
+  const [rates, setRates] = useState<RateBook>(initialState.rates);
+  const [rateUnits, setRateUnits] = useState<RateUnitBook>(
+    initialState.rateUnits,
+  );
+  const rateInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const dealerCurrencies = CURRENCIES.filter(
     ({ code }) => code === 'BND' || code === 'RM',
@@ -235,7 +337,39 @@ export default function Home() {
     }));
   };
 
-  const clearRates = () => setRates(DEFAULT_RATES);
+  const clearRates = () => setRates(structuredClone(DEFAULT_RATES));
+
+  const handleRateKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+    inputIndex: number,
+  ) => {
+    if (event.key !== 'Enter') return;
+
+    event.preventDefault();
+    const nextInput = rateInputRefs.current[inputIndex + 1];
+    if (nextInput) {
+      nextInput.focus();
+      nextInput.select();
+    } else {
+      event.currentTarget.blur();
+    }
+  };
+
+  useEffect(() => {
+    const stateToStore: StoredCalculatorState = {
+      sourceCurrency,
+      dealerCurrency,
+      targetCurrency: rowCurrencies[1],
+      rates,
+      rateUnits,
+    };
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToStore));
+    } catch {
+      // The calculator still works when browser storage is unavailable.
+    }
+  }, [dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency]);
 
   useEffect(() => {
     const context = (
@@ -533,12 +667,18 @@ export default function Home() {
                   <label htmlFor={`buying-${index}`}>Dealer buying</label>
                   <Input
                     id={`buying-${index}`}
+                    ref={(element) => {
+                      rateInputRefs.current[index * 2] = element;
+                    }}
                     type="number"
                     min="0"
                     step="any"
                     inputMode="decimal"
+                    enterKeyHint="next"
                     placeholder="0.0000"
                     value={rates[currency].buying}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) => handleRateKeyDown(event, index * 2)}
                     onChange={(event) =>
                       changeRate(currency, 'buying', event.target.value)
                     }
@@ -550,12 +690,22 @@ export default function Home() {
                   <label htmlFor={`selling-${index}`}>Dealer selling</label>
                   <Input
                     id={`selling-${index}`}
+                    ref={(element) => {
+                      rateInputRefs.current[index * 2 + 1] = element;
+                    }}
                     type="number"
                     min="0"
                     step="any"
                     inputMode="decimal"
+                    enterKeyHint={
+                      index === rowCurrencies.length - 1 ? 'done' : 'next'
+                    }
                     placeholder="0.0000"
                     value={rates[currency].selling}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) =>
+                      handleRateKeyDown(event, index * 2 + 1)
+                    }
                     onChange={(event) =>
                       changeRate(currency, 'selling', event.target.value)
                     }
@@ -661,7 +811,7 @@ export default function Home() {
         </aside>
 
         <footer>
-          Rates are calculated in your browser and are not saved or sent
+          Rates are calculated and remembered on this device. They are not sent
           anywhere.
         </footer>
       </div>

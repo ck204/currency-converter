@@ -39,10 +39,18 @@ type RateUnit = 1 | 100;
 type Rate = { buying: string; selling: string };
 type RateBook = Record<CurrencyCode, Rate>;
 type RateUnitBook = Record<CurrencyCode, RateUnit>;
+type RateTouchBook = Partial<
+  Record<CurrencyCode, Partial<Record<keyof Rate, boolean>>>
+>;
+type RateValidation = {
+  level: 'error' | 'warning';
+  message: string;
+};
 type StoredCalculatorState = {
   sourceCurrency: RouteCurrency;
   dealerCurrency: RouteCurrency;
   targetCurrency: CurrencyCode;
+  amount: string;
   rates: RateBook;
   rateUnits: RateUnitBook;
 };
@@ -110,6 +118,42 @@ const formatRate = (value: number) =>
     maximumFractionDigits: 6,
   }).format(value);
 
+const formatAmount = (value: number) =>
+  new Intl.NumberFormat('en', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const validateRate = (rate: Rate): RateValidation | null => {
+  if (rate.buying === '' && rate.selling === '') return null;
+
+  const buying = toPositiveNumber(rate.buying);
+  const selling = toPositiveNumber(rate.selling);
+  if (buying === null || selling === null) {
+    return {
+      level: 'error',
+      message: 'Enter positive numbers for both buying and selling.',
+    };
+  }
+
+  if (buying > selling) {
+    return {
+      level: 'error',
+      message: 'Buying is higher than selling. Check if the rates are swapped.',
+    };
+  }
+
+  const spread = ((selling - buying) / ((selling + buying) / 2)) * 100;
+  if (spread > 15) {
+    return {
+      level: 'warning',
+      message: `Wide spread (${spread.toFixed(1)}%). Check the values and quoted unit.`,
+    };
+  }
+
+  return null;
+};
+
 const otherRouteCurrency = (currency: RouteCurrency): RouteCurrency =>
   currency === 'BND' ? 'RM' : 'BND';
 
@@ -131,6 +175,7 @@ const readStoredState = (): StoredCalculatorState => {
     sourceCurrency: 'BND',
     dealerCurrency: 'RM',
     targetCurrency: 'RMB',
+    amount: '',
     rates: structuredClone(DEFAULT_RATES),
     rateUnits: structuredClone(DEFAULT_RATE_UNITS),
   };
@@ -155,6 +200,9 @@ const readStoredState = (): StoredCalculatorState => {
     const targetCurrency = isForeignCurrency(storedState.targetCurrency)
       ? storedState.targetCurrency
       : fallback.targetCurrency;
+    const amount = isRateInputValue(storedState.amount)
+      ? storedState.amount
+      : fallback.amount;
 
     const rates = structuredClone(DEFAULT_RATES);
     if (isRecord(storedState.rates)) {
@@ -184,6 +232,7 @@ const readStoredState = (): StoredCalculatorState => {
       sourceCurrency,
       dealerCurrency,
       targetCurrency,
+      amount,
       rates,
       rateUnits,
     };
@@ -263,30 +312,72 @@ export default function Home() {
     initialState.sourceCurrency,
     initialState.targetCurrency,
   ]);
+  const [amount, setAmount] = useState(initialState.amount);
   const [rates, setRates] = useState<RateBook>(initialState.rates);
   const [rateUnits, setRateUnits] = useState<RateUnitBook>(
     initialState.rateUnits,
   );
+  const [rateTouches, setRateTouches] = useState<RateTouchBook>(() => {
+    const touches: RateTouchBook = {};
+    for (const { code } of CURRENCIES) {
+      if (
+        initialState.rates[code].buying !== '' ||
+        initialState.rates[code].selling !== ''
+      ) {
+        touches[code] = { buying: true, selling: true };
+      }
+    }
+    return touches;
+  });
   const rateInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const dealerCurrencies = CURRENCIES.filter(
     ({ code }) => code === 'BND' || code === 'RM',
   );
 
+  const rateValidations = useMemo(() => {
+    const validations = {} as Record<CurrencyCode, RateValidation | null>;
+    for (const { code } of CURRENCIES) {
+      validations[code] = validateRate(rates[code]);
+    }
+    return validations;
+  }, [rates]);
+
+  const hasBlockingRateError = rowCurrencies.some(
+    (currency) => rateValidations[currency]?.level === 'error',
+  );
+  const hasVisibleBlockingRateError = rowCurrencies.some(
+    (currency) =>
+      rateTouches[currency]?.buying &&
+      rateTouches[currency]?.selling &&
+      rateValidations[currency]?.level === 'error',
+  );
+  const amountValue = toPositiveNumber(amount);
+  const hasAmountError = amount !== '' && amountValue === null;
+
   const results = useMemo(
     () => [
       {
         currency: rowCurrencies[1],
-        quote: getQuote(
-          sourceCurrency,
-          dealerCurrency,
-          rowCurrencies[1],
-          rates,
-          rateUnits,
-        ),
+        quote: hasBlockingRateError
+          ? null
+          : getQuote(
+              sourceCurrency,
+              dealerCurrency,
+              rowCurrencies[1],
+              rates,
+              rateUnits,
+            ),
       },
     ],
-    [dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency],
+    [
+      dealerCurrency,
+      hasBlockingRateError,
+      rateUnits,
+      rates,
+      rowCurrencies,
+      sourceCurrency,
+    ],
   );
 
   const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(
@@ -337,7 +428,22 @@ export default function Home() {
     }));
   };
 
-  const clearRates = () => setRates(structuredClone(DEFAULT_RATES));
+  const markRateTouched = (currency: CurrencyCode, side: keyof Rate) => {
+    setRateTouches((current) => ({
+      ...current,
+      [currency]: { ...current[currency], [side]: true },
+    }));
+  };
+
+  const clearRates = () => {
+    setRates(structuredClone(DEFAULT_RATES));
+    setRateTouches({});
+  };
+
+  const getVisibleRateValidation = (currency: CurrencyCode) =>
+    rateTouches[currency]?.buying && rateTouches[currency]?.selling
+      ? rateValidations[currency]
+      : null;
 
   const handleRateKeyDown = (
     event: KeyboardEvent<HTMLInputElement>,
@@ -360,6 +466,7 @@ export default function Home() {
       sourceCurrency,
       dealerCurrency,
       targetCurrency: rowCurrencies[1],
+      amount,
       rates,
       rateUnits,
     };
@@ -369,7 +476,7 @@ export default function Home() {
     } catch {
       // The calculator still works when browser storage is unavailable.
     }
-  }, [dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency]);
+  }, [amount, dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency]);
 
   useEffect(() => {
     const context = (
@@ -453,6 +560,7 @@ export default function Home() {
             const nextRates: RateBook = structuredClone(DEFAULT_RATES);
             const nextRateUnits: RateUnitBook =
               structuredClone(DEFAULT_RATE_UNITS);
+            const nextRateTouches: RateTouchBook = {};
             let configuredTarget: CurrencyCode | undefined;
             for (const item of candidate.rates) {
               const rate = item as {
@@ -478,6 +586,10 @@ export default function Home() {
                 buying: String(rate.buying),
                 selling: String(rate.selling),
               };
+              nextRateTouches[rate.currency] = {
+                buying: true,
+                selling: true,
+              };
               if (
                 rate.currency !== candidate.sourceCurrency &&
                 rate.currency !== candidate.dealerCurrency &&
@@ -494,6 +606,7 @@ export default function Home() {
             setRowCurrencies(makeRateRows(configuredSource, configuredTarget));
             setRates(nextRates);
             setRateUnits(nextRateUnits);
+            setRateTouches(nextRateTouches);
             return {
               sourceCurrency: candidate.sourceCurrency,
               dealerCurrency: candidate.dealerCurrency,
@@ -678,9 +791,18 @@ export default function Home() {
                     placeholder="0.0000"
                     value={rates[currency].buying}
                     onFocus={(event) => event.currentTarget.select()}
+                    onBlur={() => markRateTouched(currency, 'buying')}
                     onKeyDown={(event) => handleRateKeyDown(event, index * 2)}
                     onChange={(event) =>
                       changeRate(currency, 'buying', event.target.value)
+                    }
+                    aria-invalid={
+                      getVisibleRateValidation(currency)?.level === 'error'
+                    }
+                    aria-describedby={
+                      getVisibleRateValidation(currency)
+                        ? `rate-validation-${index}`
+                        : undefined
                     }
                     aria-label={`${currency} buying rate in ${dealerCurrency}`}
                   />
@@ -703,15 +825,38 @@ export default function Home() {
                     placeholder="0.0000"
                     value={rates[currency].selling}
                     onFocus={(event) => event.currentTarget.select()}
+                    onBlur={() => markRateTouched(currency, 'selling')}
                     onKeyDown={(event) =>
                       handleRateKeyDown(event, index * 2 + 1)
                     }
                     onChange={(event) =>
                       changeRate(currency, 'selling', event.target.value)
                     }
+                    aria-invalid={
+                      getVisibleRateValidation(currency)?.level === 'error'
+                    }
+                    aria-describedby={
+                      getVisibleRateValidation(currency)
+                        ? `rate-validation-${index}`
+                        : undefined
+                    }
                     aria-label={`${currency} selling rate in ${dealerCurrency}`}
                   />
                 </div>
+
+                {getVisibleRateValidation(currency) && (
+                  <p
+                    className={`rate-validation rate-validation-${getVisibleRateValidation(currency)?.level}`}
+                    id={`rate-validation-${index}`}
+                    role={
+                      getVisibleRateValidation(currency)?.level === 'error'
+                        ? 'alert'
+                        : 'status'
+                    }
+                  >
+                    {getVisibleRateValidation(currency)?.message}
+                  </p>
+                )}
               </div>
             ))}
           </fieldset>
@@ -737,6 +882,43 @@ export default function Home() {
             </div>
           </div>
 
+          <div className="amount-converter">
+            <div className="amount-copy">
+              <label htmlFor="exchange-amount">
+                Amount you have <span>Optional</span>
+              </label>
+              <p id="exchange-amount-help">
+                Enter an amount to estimate the total you will receive.
+              </p>
+            </div>
+            <div className="amount-input-wrap">
+              <Input
+                id="exchange-amount"
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                enterKeyHint="done"
+                placeholder="e.g. 500"
+                value={amount}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setAmount(event.target.value)}
+                aria-invalid={hasAmountError}
+                aria-describedby={
+                  hasAmountError
+                    ? 'exchange-amount-error'
+                    : 'exchange-amount-help'
+                }
+              />
+              <span>{sourceCurrency}</span>
+            </div>
+            {hasAmountError && (
+              <p className="amount-error" id="exchange-amount-error">
+                Enter an amount greater than zero, or leave it blank.
+              </p>
+            )}
+          </div>
+
           <div className="result-grid">
             {results.map(({ currency, quote }) => (
               <article className="result-card" key={currency}>
@@ -747,7 +929,9 @@ export default function Home() {
                     <span>{currency}</span>
                   </div>
                   <span className="status-pill">
-                    {quote?.indirect ? 'Cross rate' : 'Direct rate'}
+                    {sourceCurrency === dealerCurrency
+                      ? 'Direct rate'
+                      : 'Cross rate'}
                   </span>
                 </div>
 
@@ -760,6 +944,17 @@ export default function Home() {
                       </strong>
                       <p>when you buy {currency} from the dealer</p>
                     </div>
+
+                    {amountValue !== null && (
+                      <div className="amount-total" aria-live="polite">
+                        <span>Estimated amount received</span>
+                        <strong>
+                          {formatAmount(amountValue)} {sourceCurrency}
+                          <small> ≈ </small>
+                          {formatRate(amountValue * quote.receives)} {currency}
+                        </strong>
+                      </div>
+                    )}
 
                     <dl className="quote-details">
                       <div>
@@ -781,10 +976,15 @@ export default function Home() {
                   </>
                 ) : (
                   <div className="empty-result">
-                    <strong>Waiting for rates</strong>
+                    <strong>
+                      {hasVisibleBlockingRateError
+                        ? 'Check the rates above'
+                        : 'Waiting for rates'}
+                    </strong>
                     <p>
-                      Enter buying and selling rates for {sourceCurrency} and{' '}
-                      {currency} above.
+                      {hasVisibleBlockingRateError
+                        ? 'Correct the highlighted buying and selling values.'
+                        : `Enter buying and selling rates for ${sourceCurrency} and ${currency} above.`}
                     </p>
                   </div>
                 )}

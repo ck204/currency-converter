@@ -114,6 +114,35 @@ select {
   margin-bottom: 32px;
 }
 
+.language-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.language-control > span {
+  color: #657672;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.035em;
+}
+
+[data-slot='native-select-wrapper'].language-select {
+  width: 180px;
+}
+
+[data-slot='native-select-wrapper'].language-select select {
+  height: 40px;
+  border-color: #bfd0cb;
+  border-radius: 10px;
+  background: #fbfdfc;
+  padding-left: 12px;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
 .brand-mark {
   display: grid;
   width: 48px;
@@ -651,7 +680,18 @@ footer {
   }
 
   .site-header {
+    flex-wrap: wrap;
     margin-bottom: 23px;
+  }
+
+  .language-control {
+    width: calc(100% - 62px);
+    align-items: stretch;
+    margin-left: 62px;
+  }
+
+  [data-slot='native-select-wrapper'].language-select {
+    width: 100%;
   }
 
   .setup-card,

@@ -16,17 +16,17 @@ import {
 import { Input } from '@/components/ui/input';
 
 const CURRENCIES = [
-  { code: 'BND', name: 'Brunei Dollar' },
-  { code: 'RM', name: 'Ringgit Malaysia' },
-  { code: 'RMB', name: 'Chinese Yuan' },
-  { code: 'NTD', name: 'Taiwan Dollar' },
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'JPY', name: 'Japanese Yen' },
-  { code: 'SGD', name: 'Singapore Dollar' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'PHP', name: 'Philippine Peso' },
-  { code: 'GBP', name: 'British Pound' },
+  { code: 'BND', name: 'Brunei Dollar', nameZh: '文莱元' },
+  { code: 'RM', name: 'Ringgit Malaysia', nameZh: '马来西亚令吉' },
+  { code: 'RMB', name: 'Chinese Yuan', nameZh: '人民币' },
+  { code: 'NTD', name: 'Taiwan Dollar', nameZh: '新台币' },
+  { code: 'USD', name: 'US Dollar', nameZh: '美元' },
+  { code: 'AUD', name: 'Australian Dollar', nameZh: '澳元' },
+  { code: 'JPY', name: 'Japanese Yen', nameZh: '日元' },
+  { code: 'SGD', name: 'Singapore Dollar', nameZh: '新加坡元' },
+  { code: 'EUR', name: 'Euro', nameZh: '欧元' },
+  { code: 'PHP', name: 'Philippine Peso', nameZh: '菲律宾比索' },
+  { code: 'GBP', name: 'British Pound', nameZh: '英镑' },
 ] as const;
 
 const FOREIGN_CURRENCIES = CURRENCIES.filter(
@@ -34,7 +34,9 @@ const FOREIGN_CURRENCIES = CURRENCIES.filter(
 );
 
 type CurrencyCode = (typeof CURRENCIES)[number]['code'];
+type Language = 'en' | 'zh-CN';
 type RouteCurrency = 'BND' | 'RM';
+type DealerCurrency = RouteCurrency | 'RMB' | 'NTD';
 type RateUnit = 1 | 100;
 type Rate = { buying: string; selling: string };
 type RateBook = Record<CurrencyCode, Rate>;
@@ -47,15 +49,161 @@ type RateValidation = {
   message: string;
 };
 type StoredCalculatorState = {
+  language: Language;
   sourceCurrency: RouteCurrency;
-  dealerCurrency: RouteCurrency;
+  dealerCurrency: DealerCurrency;
   targetCurrency: CurrencyCode;
+  targetSelected: boolean;
   amount: string;
   rates: RateBook;
   rateUnits: RateUnitBook;
 };
 
 const STORAGE_KEY = 'currency-converter-state-v1';
+
+const COPY = {
+  en: {
+    pageTitle: 'Currency Converter',
+    eyebrow: 'Cross-rate calculator',
+    languageLabel: 'Change language',
+    languageEnglish: 'English',
+    languageChinese: 'Simplified Chinese',
+    setupHeading: 'Choose the exchange route',
+    setupDescription:
+      'Tell us what you have and the currency used by the dealer.',
+    sourceLabel: 'You have',
+    sourceAria: 'Currency you have',
+    dealerLabel: 'Dealer operates in',
+    dealerAria: 'Dealer currency',
+    convertsTo: 'Converts to',
+    foreignCurrency: 'Foreign currency',
+    ratesHeading: 'Enter the dealer’s rates',
+    ratesDescription:
+      'Copy the displayed rates and choose whether they cover 1 or 100 units.',
+    clearRates: 'Clear rates',
+    dealerRates: 'Dealer rates',
+    currency: 'Currency',
+    quotedPer: 'Quoted per',
+    dealerBuying: 'Dealer buying',
+    dealerSelling: 'Dealer selling',
+    yourCurrencyRate: 'Your currency rate',
+    foreignCurrencyRate: 'Foreign currency rate',
+    selectCurrency: 'Select currency',
+    quotedUnits: (currency: CurrencyCode) => `${currency} quoted units`,
+    oneUnit: '1 unit',
+    oneHundredUnits: '100 units',
+    buyingRate: (currency: CurrencyCode, dealer: DealerCurrency) =>
+      `${currency} buying rate in ${dealer}`,
+    sellingRate: (currency: CurrencyCode, dealer: DealerCurrency) =>
+      `${currency} selling rate in ${dealer}`,
+    validationPositive: 'Enter positive numbers for both buying and selling.',
+    validationBuyingHigher:
+      'Buying is higher than selling. Check if the rates are swapped.',
+    validationWideSpread: (spread: string) =>
+      `Wide spread (${spread}%). Check the values and quoted unit.`,
+    rateNote:
+      '“Buying” means the dealer buys that currency. “Selling” means the dealer sells it. Rates quoted per 100 are divided by 100 before calculating.',
+    resultsHeading: 'Effective direct rates',
+    resultsDescription: (dealer: DealerCurrency) =>
+      `The dealer’s ${dealer} step is included automatically.`,
+    amountLabel: 'Amount you have',
+    optional: 'Optional',
+    amountHelp: 'Enter an amount to estimate the total you will receive.',
+    amountPlaceholder: 'e.g. 500',
+    amountError: 'Enter an amount greater than zero, or leave it blank.',
+    directRate: 'Direct rate',
+    crossRate: 'Cross rate',
+    oneGets: (source: RouteCurrency) => `1 ${source} gets`,
+    whenBuying: (currency: CurrencyCode) =>
+      `when you buy ${currency} from the dealer`,
+    estimatedAmount: 'Estimated amount received',
+    checkRates: 'Check the rates above',
+    waitingRates: 'Waiting for rates',
+    chooseCurrency: 'Choose a currency',
+    chooseCurrencyDescription:
+      'Select the second-row currency above to calculate the direct rate.',
+    correctRates: 'Correct the highlighted buying and selling values.',
+    enterRates: (source: RouteCurrency, currency: CurrencyCode) =>
+      `Enter buying and selling rates for ${source} and ${currency} above.`,
+    googleAria: 'Google rate comparison',
+    compareGoogle: 'Compare with Google',
+    googleDescription: (source: RouteCurrency, currency: CurrencyCode) =>
+      `See Google’s current market result for 1 ${source} to ${currency}.`,
+    checkGoogle: (source: RouteCurrency, currency: CurrencyCode) =>
+      `Check ${source} → ${currency} on Google`,
+    footer:
+      'Rates are calculated and remembered on this device. They are not sent anywhere.',
+  },
+  'zh-CN': {
+    pageTitle: '货币换算器',
+    eyebrow: '交叉汇率计算器',
+    languageLabel: '切换语言',
+    languageEnglish: '英文',
+    languageChinese: '简体中文',
+    setupHeading: '选择兑换路径',
+    setupDescription: '选择您持有的货币和兑换商使用的货币。',
+    sourceLabel: '您持有',
+    sourceAria: '您持有的货币',
+    dealerLabel: '兑换商使用',
+    dealerAria: '兑换商使用的货币',
+    convertsTo: '兑换为',
+    foreignCurrency: '外币',
+    ratesHeading: '输入兑换商汇率',
+    ratesDescription:
+      '输入显示的汇率，并选择汇率是按 1 个还是 100 个单位报价。',
+    clearRates: '清除汇率',
+    dealerRates: '兑换商汇率',
+    currency: '货币',
+    quotedPer: '报价单位',
+    dealerBuying: '兑换商买入价',
+    dealerSelling: '兑换商卖出价',
+    yourCurrencyRate: '您持有货币的汇率',
+    foreignCurrencyRate: '外币汇率',
+    selectCurrency: '选择货币',
+    quotedUnits: (currency: CurrencyCode) => `${currency} 的报价单位`,
+    oneUnit: '1 个单位',
+    oneHundredUnits: '100 个单位',
+    buyingRate: (currency: CurrencyCode, dealer: DealerCurrency) =>
+      `以 ${dealer} 计价的 ${currency} 买入价`,
+    sellingRate: (currency: CurrencyCode, dealer: DealerCurrency) =>
+      `以 ${dealer} 计价的 ${currency} 卖出价`,
+    validationPositive: '请为买入价和卖出价输入正数。',
+    validationBuyingHigher: '买入价高于卖出价。请检查两者是否填反。',
+    validationWideSpread: (spread: string) =>
+      `买卖价差较大（${spread}%）。请检查数值和报价单位。`,
+    rateNote:
+      '“买入价”是兑换商买入该货币的价格；“卖出价”是兑换商卖出该货币的价格。按 100 个单位报价的汇率会先除以 100 再计算。',
+    resultsHeading: '实际直接汇率',
+    resultsDescription: (dealer: DealerCurrency) =>
+      `系统已自动计入兑换商使用 ${dealer} 的兑换步骤。`,
+    amountLabel: '您持有的金额',
+    optional: '可选',
+    amountHelp: '输入金额以估算您将收到的总额。',
+    amountPlaceholder: '例如 500',
+    amountError: '请输入大于零的金额，或留空。',
+    directRate: '直接汇率',
+    crossRate: '交叉汇率',
+    oneGets: (source: RouteCurrency) => `1 ${source} 可兑换`,
+    whenBuying: (currency: CurrencyCode) => `当您从兑换商购买 ${currency} 时`,
+    estimatedAmount: '预计收到金额',
+    checkRates: '请检查上方汇率',
+    waitingRates: '等待输入汇率',
+    chooseCurrency: '选择一种货币',
+    chooseCurrencyDescription: '请在上方第二行选择货币以计算直接汇率。',
+    correctRates: '请修正突出显示的买入价和卖出价。',
+    enterRates: (source: RouteCurrency, currency: CurrencyCode) =>
+      `请在上方输入 ${source} 和 ${currency} 的买入价与卖出价。`,
+    googleAria: 'Google 汇率比较',
+    compareGoogle: '与 Google 比较',
+    googleDescription: (source: RouteCurrency, currency: CurrencyCode) =>
+      `查看 Google 当前 1 ${source} 兑换 ${currency} 的市场结果。`,
+    checkGoogle: (source: RouteCurrency, currency: CurrencyCode) =>
+      `在 Google 上查看 ${source} → ${currency}`,
+    footer: '汇率在此设备上计算并保存，不会发送到任何地方。',
+  },
+} as const;
+
+type Copy = (typeof COPY)[Language];
 
 const DEFAULT_RATES: RateBook = {
   BND: { buying: '', selling: '' },
@@ -112,19 +260,19 @@ const normalizeRate = (value: string, quotedUnits: RateUnit) => {
   return rate === null ? null : rate / quotedUnits;
 };
 
-const formatRate = (value: number) =>
-  new Intl.NumberFormat('en', {
+const formatRate = (value: number, language: Language) =>
+  new Intl.NumberFormat(language, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 6,
   }).format(value);
 
-const formatAmount = (value: number) =>
-  new Intl.NumberFormat('en', {
+const formatAmount = (value: number, language: Language) =>
+  new Intl.NumberFormat(language, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value);
 
-const validateRate = (rate: Rate): RateValidation | null => {
+const validateRate = (rate: Rate, copy: Copy): RateValidation | null => {
   if (rate.buying === '' && rate.selling === '') return null;
 
   const buying = toPositiveNumber(rate.buying);
@@ -132,14 +280,14 @@ const validateRate = (rate: Rate): RateValidation | null => {
   if (buying === null || selling === null) {
     return {
       level: 'error',
-      message: 'Enter positive numbers for both buying and selling.',
+      message: copy.validationPositive,
     };
   }
 
   if (buying > selling) {
     return {
       level: 'error',
-      message: 'Buying is higher than selling. Check if the rates are swapped.',
+      message: copy.validationBuyingHigher,
     };
   }
 
@@ -147,18 +295,21 @@ const validateRate = (rate: Rate): RateValidation | null => {
   if (spread > 15) {
     return {
       level: 'warning',
-      message: `Wide spread (${spread.toFixed(1)}%). Check the values and quoted unit.`,
+      message: copy.validationWideSpread(spread.toFixed(1)),
     };
   }
 
   return null;
 };
 
-const otherRouteCurrency = (currency: RouteCurrency): RouteCurrency =>
-  currency === 'BND' ? 'RM' : 'BND';
-
 const isRouteCurrency = (value: unknown): value is RouteCurrency =>
   value === 'BND' || value === 'RM';
+
+const isLanguage = (value: unknown): value is Language =>
+  value === 'en' || value === 'zh-CN';
+
+const isDealerCurrency = (value: unknown): value is DealerCurrency =>
+  value === 'BND' || value === 'RM' || value === 'RMB' || value === 'NTD';
 
 const isForeignCurrency = (value: unknown): value is CurrencyCode =>
   isCurrency(value) && value !== 'BND' && value !== 'RM';
@@ -172,9 +323,11 @@ const isRateInputValue = (value: unknown): value is string =>
 
 const readStoredState = (): StoredCalculatorState => {
   const fallback: StoredCalculatorState = {
+    language: 'en',
     sourceCurrency: 'BND',
     dealerCurrency: 'RM',
     targetCurrency: 'RMB',
+    targetSelected: false,
     amount: '',
     rates: structuredClone(DEFAULT_RATES),
     rateUnits: structuredClone(DEFAULT_RATE_UNITS),
@@ -189,17 +342,19 @@ const readStoredState = (): StoredCalculatorState => {
     const storedState: unknown = JSON.parse(rawState);
     if (!isRecord(storedState)) return fallback;
 
+    const language = isLanguage(storedState.language)
+      ? storedState.language
+      : fallback.language;
     const sourceCurrency = isRouteCurrency(storedState.sourceCurrency)
       ? storedState.sourceCurrency
       : fallback.sourceCurrency;
-    const dealerCurrency =
-      isRouteCurrency(storedState.dealerCurrency) &&
-      storedState.dealerCurrency !== sourceCurrency
-        ? storedState.dealerCurrency
-        : otherRouteCurrency(sourceCurrency);
+    const dealerCurrency = isDealerCurrency(storedState.dealerCurrency)
+      ? storedState.dealerCurrency
+      : fallback.dealerCurrency;
     const targetCurrency = isForeignCurrency(storedState.targetCurrency)
       ? storedState.targetCurrency
       : fallback.targetCurrency;
+    const targetSelected = storedState.targetSelected === true;
     const amount = isRateInputValue(storedState.amount)
       ? storedState.amount
       : fallback.amount;
@@ -229,9 +384,11 @@ const readStoredState = (): StoredCalculatorState => {
     }
 
     return {
+      language,
       sourceCurrency,
       dealerCurrency,
       targetCurrency,
+      targetSelected,
       amount,
       rates,
       rateUnits,
@@ -302,16 +459,20 @@ function getQuote(
 
 export default function Home() {
   const [initialState] = useState(readStoredState);
+  const [language, setLanguage] = useState<Language>(initialState.language);
   const [sourceCurrency, setSourceCurrency] = useState<RouteCurrency>(
     initialState.sourceCurrency,
   );
-  const [dealerCurrency, setDealerCurrency] = useState<RouteCurrency>(
+  const [dealerCurrency, setDealerCurrency] = useState<DealerCurrency>(
     initialState.dealerCurrency,
   );
   const [rowCurrencies, setRowCurrencies] = useState<CurrencyCode[]>([
     initialState.sourceCurrency,
     initialState.targetCurrency,
   ]);
+  const [targetSelected, setTargetSelected] = useState(
+    initialState.targetSelected,
+  );
   const [amount, setAmount] = useState(initialState.amount);
   const [rates, setRates] = useState<RateBook>(initialState.rates);
   const [rateUnits, setRateUnits] = useState<RateUnitBook>(
@@ -330,18 +491,35 @@ export default function Home() {
     return touches;
   });
   const rateInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const copy = COPY[language];
+  const languageControlCopy = COPY[language === 'en' ? 'zh-CN' : 'en'];
+  const targetCurrency = rowCurrencies[1];
+  const targetCurrencyDetails = CURRENCIES.find(
+    ({ code }) => code === targetCurrency,
+  );
+  const targetCurrencyName =
+    (language === 'en'
+      ? targetCurrencyDetails?.name
+      : targetCurrencyDetails?.nameZh) ?? targetCurrency;
+  const targetCurrencyDisplay = targetSelected
+    ? `${targetCurrency} — ${targetCurrencyName}`
+    : copy.foreignCurrency;
 
-  const dealerCurrencies = CURRENCIES.filter(
+  const sourceCurrencies = CURRENCIES.filter(
     ({ code }) => code === 'BND' || code === 'RM',
+  );
+  const dealerCurrencies = CURRENCIES.filter(
+    ({ code }) =>
+      code === 'BND' || code === 'RM' || code === 'RMB' || code === 'NTD',
   );
 
   const rateValidations = useMemo(() => {
     const validations = {} as Record<CurrencyCode, RateValidation | null>;
     for (const { code } of CURRENCIES) {
-      validations[code] = validateRate(rates[code]);
+      validations[code] = validateRate(rates[code], copy);
     }
     return validations;
-  }, [rates]);
+  }, [copy, rates]);
 
   const hasBlockingRateError = rowCurrencies.some(
     (currency) => rateValidations[currency]?.level === 'error',
@@ -359,15 +537,16 @@ export default function Home() {
     () => [
       {
         currency: rowCurrencies[1],
-        quote: hasBlockingRateError
-          ? null
-          : getQuote(
-              sourceCurrency,
-              dealerCurrency,
-              rowCurrencies[1],
-              rates,
-              rateUnits,
-            ),
+        quote:
+          !targetSelected || hasBlockingRateError
+            ? null
+            : getQuote(
+                sourceCurrency,
+                dealerCurrency,
+                rowCurrencies[1],
+                rates,
+                rateUnits,
+              ),
       },
     ],
     [
@@ -377,6 +556,7 @@ export default function Home() {
       rates,
       rowCurrencies,
       sourceCurrency,
+      targetSelected,
     ],
   );
 
@@ -385,29 +565,17 @@ export default function Home() {
   )}`;
 
   const changeSourceCurrency = (currency: RouteCurrency) => {
-    const nextDealer =
-      currency === dealerCurrency
-        ? otherRouteCurrency(currency)
-        : dealerCurrency;
-
     setSourceCurrency(currency);
-    setDealerCurrency(nextDealer);
     setRowCurrencies((current) => makeRateRows(currency, current[1]));
   };
 
-  const changeDealerCurrency = (currency: RouteCurrency) => {
-    const nextSource =
-      currency === sourceCurrency
-        ? otherRouteCurrency(currency)
-        : sourceCurrency;
-
+  const changeDealerCurrency = (currency: DealerCurrency) => {
     setDealerCurrency(currency);
-    setSourceCurrency(nextSource);
-    setRowCurrencies((current) => makeRateRows(nextSource, current[1]));
   };
 
   const changeTargetCurrency = (currency: CurrencyCode) => {
     setRowCurrencies((current) => [current[0], currency]);
+    setTargetSelected(true);
   };
 
   const changeRate = (
@@ -438,6 +606,7 @@ export default function Home() {
   const clearRates = () => {
     setRates(structuredClone(DEFAULT_RATES));
     setRateTouches({});
+    setTargetSelected(false);
   };
 
   const getVisibleRateValidation = (currency: CurrencyCode) =>
@@ -463,9 +632,11 @@ export default function Home() {
 
   useEffect(() => {
     const stateToStore: StoredCalculatorState = {
+      language,
       sourceCurrency,
       dealerCurrency,
       targetCurrency: rowCurrencies[1],
+      targetSelected,
       amount,
       rates,
       rateUnits,
@@ -476,7 +647,21 @@ export default function Home() {
     } catch {
       // The calculator still works when browser storage is unavailable.
     }
-  }, [amount, dealerCurrency, rateUnits, rates, rowCurrencies, sourceCurrency]);
+  }, [
+    amount,
+    dealerCurrency,
+    language,
+    rateUnits,
+    rates,
+    rowCurrencies,
+    sourceCurrency,
+    targetSelected,
+  ]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.title = copy.pageTitle;
+  }, [copy.pageTitle, language]);
 
   useEffect(() => {
     const context = (
@@ -514,7 +699,10 @@ export default function Home() {
             type: 'object',
             properties: {
               sourceCurrency: { type: 'string', enum: ['BND', 'RM'] },
-              dealerCurrency: { type: 'string', enum: ['BND', 'RM'] },
+              dealerCurrency: {
+                type: 'string',
+                enum: ['BND', 'RM', 'RMB', 'NTD'],
+              },
               rates: {
                 type: 'array',
                 items: {
@@ -549,10 +737,8 @@ export default function Home() {
             if (
               !isCurrency(candidate.sourceCurrency) ||
               !['BND', 'RM'].includes(candidate.sourceCurrency) ||
-              !isCurrency(candidate.dealerCurrency) ||
-              !['BND', 'RM'].includes(candidate.dealerCurrency) ||
-              !Array.isArray(candidate.rates) ||
-              candidate.sourceCurrency === candidate.dealerCurrency
+              !isDealerCurrency(candidate.dealerCurrency) ||
+              !Array.isArray(candidate.rates)
             ) {
               throw new Error('Invalid exchange calculator configuration.');
             }
@@ -600,10 +786,11 @@ export default function Home() {
             }
 
             const configuredSource = candidate.sourceCurrency as RouteCurrency;
-            const configuredDealer = candidate.dealerCurrency as RouteCurrency;
+            const configuredDealer = candidate.dealerCurrency as DealerCurrency;
             setSourceCurrency(configuredSource);
             setDealerCurrency(configuredDealer);
             setRowCurrencies(makeRateRows(configuredSource, configuredTarget));
+            setTargetSelected(configuredTarget !== undefined);
             setRates(nextRates);
             setRateUnits(nextRateUnits);
             setRateTouches(nextRateTouches);
@@ -632,34 +819,51 @@ export default function Home() {
             <span>$</span>
           </div>
           <div>
-            <p className="eyebrow">Cross-rate calculator</p>
-            <h1>Currency Converter</h1>
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h1>{copy.pageTitle}</h1>
           </div>
+          <label className="language-control">
+            <span>{languageControlCopy.languageLabel}</span>
+            <NativeSelect
+              className="language-select"
+              value={language}
+              onChange={(event) => setLanguage(event.target.value as Language)}
+              aria-label={languageControlCopy.languageLabel}
+            >
+              <NativeSelectOption value="en">
+                {languageControlCopy.languageEnglish}
+              </NativeSelectOption>
+              <NativeSelectOption value="zh-CN">
+                {languageControlCopy.languageChinese}
+              </NativeSelectOption>
+            </NativeSelect>
+          </label>
         </header>
 
         <section className="setup-card" aria-labelledby="setup-heading">
           <div className="section-heading">
             <span className="step-number">01</span>
             <div>
-              <h2 id="setup-heading">Choose the exchange route</h2>
-              <p>Tell us what you have and the currency used by the dealer.</p>
+              <h2 id="setup-heading">{copy.setupHeading}</h2>
+              <p>{copy.setupDescription}</p>
             </div>
           </div>
 
           <div className="route-builder">
             <label className="field-block">
-              <span>You have</span>
+              <span>{copy.sourceLabel}</span>
               <NativeSelect
                 className="select-control"
                 value={sourceCurrency}
                 onChange={(event) =>
                   changeSourceCurrency(event.target.value as RouteCurrency)
                 }
-                aria-label="Currency you have"
+                aria-label={copy.sourceAria}
               >
-                {dealerCurrencies.map((currency) => (
+                {sourceCurrencies.map((currency) => (
                   <NativeSelectOption key={currency.code} value={currency.code}>
-                    {currency.code} — {currency.name}
+                    {currency.code} —{' '}
+                    {language === 'en' ? currency.name : currency.nameZh}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -670,18 +874,19 @@ export default function Home() {
             </div>
 
             <label className="field-block">
-              <span>Dealer operates in</span>
+              <span>{copy.dealerLabel}</span>
               <NativeSelect
                 className="select-control"
                 value={dealerCurrency}
                 onChange={(event) =>
-                  changeDealerCurrency(event.target.value as RouteCurrency)
+                  changeDealerCurrency(event.target.value as DealerCurrency)
                 }
-                aria-label="Dealer currency"
+                aria-label={copy.dealerAria}
               >
                 {dealerCurrencies.map((currency) => (
                   <NativeSelectOption key={currency.code} value={currency.code}>
-                    {currency.code} — {currency.name}
+                    {currency.code} —{' '}
+                    {language === 'en' ? currency.name : currency.nameZh}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
@@ -692,8 +897,8 @@ export default function Home() {
             </div>
 
             <div className="route-destination">
-              <span>Converts to</span>
-              <strong>Foreign currency</strong>
+              <span>{copy.convertsTo}</span>
+              <strong>{targetCurrencyDisplay}</strong>
             </div>
           </div>
 
@@ -702,7 +907,9 @@ export default function Home() {
             <ArrowRight size={16} aria-hidden="true" />
             <span>{dealerCurrency}</span>
             <ArrowRight size={16} aria-hidden="true" />
-            <span>Foreign currency</span>
+            <span>
+              {targetSelected ? targetCurrency : copy.foreignCurrency}
+            </span>
           </div>
         </section>
 
@@ -711,79 +918,90 @@ export default function Home() {
             <div className="heading-with-step">
               <span className="step-number">02</span>
               <div>
-                <h2 id="rates-heading">Enter the dealer’s rates</h2>
-                <p>
-                  Copy the displayed rates and choose whether they cover 1 or
-                  100 units.
-                </p>
+                <h2 id="rates-heading">{copy.ratesHeading}</h2>
+                <p>{copy.ratesDescription}</p>
               </div>
             </div>
             <button className="clear-button" type="button" onClick={clearRates}>
               <RefreshCw size={15} aria-hidden="true" />
-              Clear rates
+              {copy.clearRates}
             </button>
           </div>
 
           <fieldset className="rate-table">
-            <legend className="sr-only">Dealer rates</legend>
+            <legend className="sr-only">{copy.dealerRates}</legend>
             <div className="rate-header" aria-hidden="true">
-              <span>Currency</span>
-              <span>Quoted per</span>
-              <span>Dealer buying</span>
-              <span>Dealer selling</span>
+              <span>{copy.currency}</span>
+              <span>{copy.quotedPer}</span>
+              <span>{copy.dealerBuying}</span>
+              <span>{copy.dealerSelling}</span>
             </div>
 
             {rowCurrencies.map((currency, index) => (
               <div className="rate-row" key={`${index}-${currency}`}>
                 <NativeSelect
                   className="currency-select"
-                  value={currency}
+                  value={index === 1 && !targetSelected ? '' : currency}
                   disabled={index === 0}
                   onChange={(event) =>
                     changeTargetCurrency(event.target.value as CurrencyCode)
                   }
                   aria-label={
-                    index === 0 ? 'Your currency rate' : 'Foreign currency rate'
+                    index === 0
+                      ? copy.yourCurrencyRate
+                      : copy.foreignCurrencyRate
                   }
                 >
+                  {index === 1 && (
+                    <NativeSelectOption value="" disabled>
+                      {copy.selectCurrency}
+                    </NativeSelectOption>
+                  )}
                   {(index === 0 ? CURRENCIES : FOREIGN_CURRENCIES).map(
                     (option) => (
                       <NativeSelectOption key={option.code} value={option.code}>
-                        {option.code} ({option.name})
+                        {option.code} (
+                        {language === 'en' ? option.name : option.nameZh})
                       </NativeSelectOption>
                     ),
                   )}
                 </NativeSelect>
 
                 <div className="mobile-rate-field">
-                  <label htmlFor={`quoted-units-${index}`}>Quoted per</label>
+                  <label htmlFor={`quoted-units-${index}`}>
+                    {copy.quotedPer}
+                  </label>
                   <NativeSelect
                     id={`quoted-units-${index}`}
                     className="unit-select"
                     value={rateUnits[currency]}
+                    disabled={index === 1 && !targetSelected}
                     onChange={(event) =>
                       changeRateUnit(
                         currency,
                         Number(event.target.value) as RateUnit,
                       )
                     }
-                    aria-label={`${currency} quoted units`}
+                    aria-label={copy.quotedUnits(currency)}
                   >
-                    <NativeSelectOption value={1}>1 unit</NativeSelectOption>
+                    <NativeSelectOption value={1}>
+                      {copy.oneUnit}
+                    </NativeSelectOption>
                     <NativeSelectOption value={100}>
-                      100 units
+                      {copy.oneHundredUnits}
                     </NativeSelectOption>
                   </NativeSelect>
                 </div>
 
                 <div className="mobile-rate-field">
-                  <label htmlFor={`buying-${index}`}>Dealer buying</label>
+                  <label htmlFor={`buying-${index}`}>{copy.dealerBuying}</label>
                   <Input
                     id={`buying-${index}`}
                     ref={(element) => {
                       rateInputRefs.current[index * 2] = element;
                     }}
                     type="number"
+                    disabled={index === 1 && !targetSelected}
                     min="0"
                     step="any"
                     inputMode="decimal"
@@ -804,18 +1022,21 @@ export default function Home() {
                         ? `rate-validation-${index}`
                         : undefined
                     }
-                    aria-label={`${currency} buying rate in ${dealerCurrency}`}
+                    aria-label={copy.buyingRate(currency, dealerCurrency)}
                   />
                 </div>
 
                 <div className="mobile-rate-field">
-                  <label htmlFor={`selling-${index}`}>Dealer selling</label>
+                  <label htmlFor={`selling-${index}`}>
+                    {copy.dealerSelling}
+                  </label>
                   <Input
                     id={`selling-${index}`}
                     ref={(element) => {
                       rateInputRefs.current[index * 2 + 1] = element;
                     }}
                     type="number"
+                    disabled={index === 1 && !targetSelected}
                     min="0"
                     step="any"
                     inputMode="decimal"
@@ -840,34 +1061,31 @@ export default function Home() {
                         ? `rate-validation-${index}`
                         : undefined
                     }
-                    aria-label={`${currency} selling rate in ${dealerCurrency}`}
+                    aria-label={copy.sellingRate(currency, dealerCurrency)}
                   />
                 </div>
 
-                {getVisibleRateValidation(currency) && (
-                  <p
-                    className={`rate-validation rate-validation-${getVisibleRateValidation(currency)?.level}`}
-                    id={`rate-validation-${index}`}
-                    role={
-                      getVisibleRateValidation(currency)?.level === 'error'
-                        ? 'alert'
-                        : 'status'
-                    }
-                  >
-                    {getVisibleRateValidation(currency)?.message}
-                  </p>
-                )}
+                {(index === 0 || targetSelected) &&
+                  getVisibleRateValidation(currency) && (
+                    <p
+                      className={`rate-validation rate-validation-${getVisibleRateValidation(currency)?.level}`}
+                      id={`rate-validation-${index}`}
+                      role={
+                        getVisibleRateValidation(currency)?.level === 'error'
+                          ? 'alert'
+                          : 'status'
+                      }
+                    >
+                      {getVisibleRateValidation(currency)?.message}
+                    </p>
+                  )}
               </div>
             ))}
           </fieldset>
 
           <div className="rate-note">
             <Info size={16} aria-hidden="true" />
-            <p>
-              “Buying” means the dealer buys that currency. “Selling” means the
-              dealer sells it. Rates quoted per 100 are divided by 100 before
-              calculating.
-            </p>
+            <p>{copy.rateNote}</p>
           </div>
         </section>
 
@@ -875,21 +1093,17 @@ export default function Home() {
           <div className="section-heading results-heading">
             <span className="step-number">03</span>
             <div>
-              <h2 id="results-heading">Effective direct rates</h2>
-              <p>
-                The dealer’s {dealerCurrency} step is included automatically.
-              </p>
+              <h2 id="results-heading">{copy.resultsHeading}</h2>
+              <p>{copy.resultsDescription(dealerCurrency)}</p>
             </div>
           </div>
 
           <div className="amount-converter">
             <div className="amount-copy">
               <label htmlFor="exchange-amount">
-                Amount you have <span>Optional</span>
+                {copy.amountLabel} <span>{copy.optional}</span>
               </label>
-              <p id="exchange-amount-help">
-                Enter an amount to estimate the total you will receive.
-              </p>
+              <p id="exchange-amount-help">{copy.amountHelp}</p>
             </div>
             <div className="amount-input-wrap">
               <Input
@@ -899,7 +1113,7 @@ export default function Home() {
                 step="any"
                 inputMode="decimal"
                 enterKeyHint="done"
-                placeholder="e.g. 500"
+                placeholder={copy.amountPlaceholder}
                 value={amount}
                 onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) => setAmount(event.target.value)}
@@ -914,7 +1128,7 @@ export default function Home() {
             </div>
             {hasAmountError && (
               <p className="amount-error" id="exchange-amount-error">
-                Enter an amount greater than zero, or leave it blank.
+                {copy.amountError}
               </p>
             )}
           </div>
@@ -926,32 +1140,41 @@ export default function Home() {
                   <div className="currency-pair">
                     <span>{sourceCurrency}</span>
                     <ArrowRight size={17} aria-hidden="true" />
-                    <span>{currency}</span>
+                    <span>
+                      {targetSelected ? currency : copy.foreignCurrency}
+                    </span>
                   </div>
-                  <span className="status-pill">
-                    {sourceCurrency === dealerCurrency
-                      ? 'Direct rate'
-                      : 'Cross rate'}
-                  </span>
+                  {targetSelected && (
+                    <span className="status-pill">
+                      {sourceCurrency === dealerCurrency
+                        ? copy.directRate
+                        : copy.crossRate}
+                    </span>
+                  )}
                 </div>
 
                 {quote ? (
                   <>
                     <div className="headline-rate">
-                      <span>1 {sourceCurrency} gets</span>
+                      <span>{copy.oneGets(sourceCurrency)}</span>
                       <strong>
-                        {formatRate(quote.receives)} <small>{currency}</small>
+                        {formatRate(quote.receives, language)}{' '}
+                        <small>{currency}</small>
                       </strong>
-                      <p>when you buy {currency} from the dealer</p>
+                      <p>{copy.whenBuying(currency)}</p>
                     </div>
 
                     {amountValue !== null && (
                       <div className="amount-total" aria-live="polite">
-                        <span>Estimated amount received</span>
+                        <span>{copy.estimatedAmount}</span>
                         <strong>
-                          {formatAmount(amountValue)} {sourceCurrency}
+                          {formatAmount(amountValue, language)} {sourceCurrency}
                           <small> ≈ </small>
-                          {formatRate(amountValue * quote.receives)} {currency}
+                          {formatRate(
+                            amountValue * quote.receives,
+                            language,
+                          )}{' '}
+                          {currency}
                         </strong>
                       </div>
                     )}
@@ -959,14 +1182,18 @@ export default function Home() {
                 ) : (
                   <div className="empty-result">
                     <strong>
-                      {hasVisibleBlockingRateError
-                        ? 'Check the rates above'
-                        : 'Waiting for rates'}
+                      {!targetSelected
+                        ? copy.chooseCurrency
+                        : hasVisibleBlockingRateError
+                          ? copy.checkRates
+                          : copy.waitingRates}
                     </strong>
                     <p>
-                      {hasVisibleBlockingRateError
-                        ? 'Correct the highlighted buying and selling values.'
-                        : `Enter buying and selling rates for ${sourceCurrency} and ${currency} above.`}
+                      {!targetSelected
+                        ? copy.chooseCurrencyDescription
+                        : hasVisibleBlockingRateError
+                          ? copy.correctRates
+                          : copy.enterRates(sourceCurrency, currency)}
                     </p>
                   </div>
                 )}
@@ -975,27 +1202,20 @@ export default function Home() {
           </div>
         </section>
 
-        <aside
-          className="google-rate-check"
-          aria-label="Google rate comparison"
-        >
-          <div>
-            <strong>Compare with Google</strong>
-            <p>
-              See Google’s current market result for 1 {sourceCurrency} to{' '}
-              {rowCurrencies[1]}.
-            </p>
-          </div>
-          <a href={googleSearchUrl} target="_blank" rel="noopener noreferrer">
-            Check {sourceCurrency} → {rowCurrencies[1]} on Google
-            <ExternalLink size={16} aria-hidden="true" />
-          </a>
-        </aside>
+        {targetSelected && (
+          <aside className="google-rate-check" aria-label={copy.googleAria}>
+            <div>
+              <strong>{copy.compareGoogle}</strong>
+              <p>{copy.googleDescription(sourceCurrency, rowCurrencies[1])}</p>
+            </div>
+            <a href={googleSearchUrl} target="_blank" rel="noopener noreferrer">
+              {copy.checkGoogle(sourceCurrency, rowCurrencies[1])}
+              <ExternalLink size={16} aria-hidden="true" />
+            </a>
+          </aside>
+        )}
 
-        <footer>
-          Rates are calculated and remembered on this device. They are not sent
-          anywhere.
-        </footer>
+        <footer>{copy.footer}</footer>
       </div>
     </main>
   );

@@ -39,6 +39,10 @@ query endpoint, using JSONP for cross-origin access. It requests rates only;
 entered amounts are calculated on the device. The “Check on Google” link
 sends the selected amount and currency to Google only when opened.
 
+The last selected currency is saved in this browser's local storage and
+restored on the next visit. Unrecognized saved values or unavailable storage
+fall back to USD. Entered amounts are not saved.
+
 Rates are requested on page load and on Refresh. Quotes may be delayed by
 up to 20 minutes. The page does not poll periodically while left open.
 Google manages quote updates; the sheet's minute recalculation setting does

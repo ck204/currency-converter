@@ -9,6 +9,7 @@ import {
 } from './google-rates';
 
 type Language = 'en' | 'zh-CN';
+const CURRENCY_KEY = 'quick-bnd-currency-v1';
 
 const COPY = {
   en: {
@@ -70,7 +71,14 @@ const numberFormat = (value: number, language: Language, precision = 6) =>
 
 export default function Converter() {
   const [language, setLanguage] = useState<Language>('en');
-  const [currency, setCurrency] = useState<Currency>('USD');
+  const [currency, setCurrency] = useState<Currency>(() => {
+    try {
+      const saved = localStorage.getItem(CURRENCY_KEY);
+      return isCurrency(saved) ? saved : 'USD';
+    } catch {
+      return 'USD';
+    }
+  });
   const [amount, setAmount] = useState('1');
   const [snapshot, setSnapshot] = useState<RateSnapshot | null>(readSavedRates);
   const [loading, setLoading] = useState(true);
@@ -83,6 +91,14 @@ export default function Converter() {
     document.title = copy.title;
     document.documentElement.lang = language;
   }, [copy.title, language]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CURRENCY_KEY, currency);
+    } catch {
+      /* Storage is optional. */
+    }
+  }, [currency]);
 
   useEffect(() => {
     const controller = new AbortController();

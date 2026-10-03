@@ -11,6 +11,14 @@ export default defineConfig({
   base: process.env.GITHUB_ACTIONS === 'true' ? '/currency-converter/' : '/',
   css: { postcss: { plugins: [tailwindcss()] } },
   plugins: [react()],
+  build: {
+    rolldownOptions: {
+      input: {
+        calculator: path.resolve(projectRoot, 'index.html'),
+        toBnd: path.resolve(projectRoot, 'quick-bnd/index.html'),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': projectRoot,

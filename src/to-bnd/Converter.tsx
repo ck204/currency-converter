@@ -192,10 +192,17 @@ export default function Converter() {
                 id="foreign-amount"
                 type="number"
                 inputMode="decimal"
+                enterKeyHint="done"
                 min="0"
                 step="any"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
                 aria-invalid={invalid}
                 aria-describedby={invalid ? 'amount-error' : undefined}
               />

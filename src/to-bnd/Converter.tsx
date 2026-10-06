@@ -10,6 +10,7 @@ import {
 
 type Language = 'en' | 'zh-CN';
 const CURRENCY_KEY = 'quick-bnd-currency-v1';
+const LANGUAGE_KEY = 'quick-bnd-language-v1';
 
 const COPY = {
   en: {
@@ -70,7 +71,14 @@ const numberFormat = (value: number, language: Language, precision = 6) =>
   );
 
 export default function Converter() {
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>(() => {
+    try {
+      const saved = localStorage.getItem(LANGUAGE_KEY);
+      return saved === 'zh-CN' ? 'zh-CN' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
   const [currency, setCurrency] = useState<Currency>(() => {
     try {
       const saved = localStorage.getItem(CURRENCY_KEY);
@@ -91,6 +99,14 @@ export default function Converter() {
     document.title = copy.title;
     document.documentElement.lang = language;
   }, [copy.title, language]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, language);
+    } catch {
+      /* Storage is optional. */
+    }
+  }, [language]);
 
   useEffect(() => {
     try {
